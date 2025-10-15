@@ -38,3 +38,8 @@ async def login(request: Request):
         return {"message": "Login successful!"}
     else:
         return {"message": "Invalid email or password."}
+
+
+@app.get("/")
+def root():
+    return {"message": "FastAPI backend is running on Render!"}
