@@ -48,3 +48,31 @@ async def login(request: Request):
 @app.get("/")
 def root():
     return {"message": "FastAPI backend is running on Render!"}
+
+@app.post("/add-employee")
+async def add_employee(request: Request):
+    try:
+        data = await request.json()
+        name = data.get("name")
+        email = data.get("email")
+        position = data.get("position")
+
+        # Supabase REST API call to insert employee
+        res = requests.post(
+            f"{SUPABASE_URL}/rest/v1/employees",
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=representation",  # optional, returns inserted row
+            },
+            json={"name": name, "email": email, "position": position}
+        )
+
+        if res.status_code in [200, 201]:
+            return {"message": "Employee added successfully!"}
+        else:
+            return {"error": res.text}
+
+    except Exception as e:
+        return {"error": str(e)}
