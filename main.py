@@ -179,3 +179,29 @@ async def upload_file(file: UploadFile = File(...)):
 
     except Exception as e:
         return {"error": str(e)}
+    
+
+@app.get("/employees")
+async def get_employees():
+    try:
+        url = f"{SUPABASE_URL}/rest/v1/employees?select=*"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+        }
+        res = requests.get(url, headers=headers, timeout=30)
+
+        # Debug logs
+        print("GET /employees status:", res.status_code)
+        print("GET /employees text:", res.text)
+
+        if res.status_code == 200:
+            employees = res.json()
+            return {"employees": employees}
+        else:
+            return {"error": "Failed to fetch employees", "status": res.status_code, "response": res.text}
+
+    except Exception as e:
+        print("GET /employees exception:", str(e))
+        return {"error": str(e)}
