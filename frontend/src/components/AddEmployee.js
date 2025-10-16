@@ -7,6 +7,7 @@ export default function AddEmployee() {
   const [file, setFile] = useState(null);
   const [message, setMessage] = useState("");
   const [employees, setEmployees] = useState([]);
+  const fileInputRef = useRef();
 
   useEffect(() => {
     fetchEmployees();
@@ -50,6 +51,9 @@ export default function AddEmployee() {
     setPosition("");
     setFile(null);
 
+    if (fileInputRef.current) {
+    fileInputRef.current.value = "";
+    }
     // Refresh employee table
     fetchEmployees();
   };
@@ -88,6 +92,7 @@ export default function AddEmployee() {
           type="file"
           onChange={(e) => setFile(e.target.files[0])}
           style={styles.fileInput}
+          ref={fileInputRef}
         />
         <button type="submit" style={styles.button}>Add Employee</button>
       </form>
@@ -163,7 +168,7 @@ const styles = {
   },
   button: {
     padding: "12px",
-    backgroundColor: "#0070f3",
+    backgroundColor: "#08f300ff",
     color: "#fff",
     border: "none",
     borderRadius: "5px",
