@@ -14,12 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Supabase Connection via Transaction Pooler ---
-DB_HOST = os.getenv("DB_HOST", "aws-1-us-east-2.pooler.supabase.com")
-DB_PORT = os.getenv("DB_PORT", "6543")  # ✅ transaction pooler port
-DB_NAME = os.getenv("DB_NAME", "postgres")
-DB_USER = os.getenv("DB_USER", "postgres.nzqzhpeccenmgglkcmhi")  # 👈 from connection string
-DB_PASS = os.getenv("DB_PASS", "Sharks@2709")
+# --- Supabase REST API credentials ---
+SUPABASE_URL = "https://nzqzhpeccenmgglkcmhi.supabase.co"  # replace with your Supabase URL
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cXpocGVjY2VubWdnbGtjbWhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2NzAzMSwiZXhwIjoyMDc2MDQzMDMxfQ.z5qf6unizb_KaF8YKpc60V2jsP54v-NsKclDW9zfYEU"  # replace with your Supabase Service Role Key
 
 @app.post("/login")
 async def login(request: Request):
@@ -28,21 +25,19 @@ async def login(request: Request):
         email = data.get("email")
         password = data.get("password")
 
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASS,
-            sslmode="require"
+        # REST API query to Supabase users table
+        res = requests.get(
+            f"{SUPABASE_URL}/rest/v1/users?email=eq.{email}&password=eq.{password}",
+            headers={
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json"
+            }
         )
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM users WHERE email=%s AND password=%s", (email, password))
-        user = cur.fetchone()
-        cur.close()
-        conn.close()
 
-        if user:
+        users = res.json()
+
+        if users:
             return {"message": "Login successful!"}
         else:
             return {"message": "Invalid email or password."}
