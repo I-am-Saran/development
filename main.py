@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import psycopg2
 import os
-
+import requests
 app = FastAPI()
 
 # Allow frontend communication (update with your frontend URL later)
