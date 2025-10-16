@@ -1,9 +1,7 @@
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import time
-import psycopg2
 from urllib.parse import quote
-import os
 import requests
 app = FastAPI()
 
@@ -19,6 +17,7 @@ app.add_middleware(
 # --- Supabase REST API credentials ---
 SUPABASE_URL = "https://nzqzhpeccenmgglkcmhi.supabase.co"  # replace with your Supabase URL
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cXpocGVjY2VubWdnbGtjbWhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2NzAzMSwiZXhwIjoyMDc2MDQzMDMxfQ.z5qf6unizb_KaF8YKpc60V2jsP54v-NsKclDW9zfYEU"  # replace with your Supabase Service Role Key
+SUPABASE_BUCKET = "employee-files"  # Replace with your actual bucket name in Supabase
 
 @app.post("/login")
 async def login(request: Request):
