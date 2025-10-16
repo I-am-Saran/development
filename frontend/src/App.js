@@ -1,21 +1,33 @@
 import React, { useState } from "react";
+import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import AddEmployee from "./components/AddEmployee";
 
-function App() {
+function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
 
-    const response = await fetch("https://development-p6rb.onrender.com/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const response = await fetch("https://development-p6rb.onrender.com/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const data = await response.json();
-    setMessage(data.message);
+      const data = await response.json();
+
+      if (data.message === "Login successful!") {
+        navigate("/add-employee"); // ✅ redirect after login
+      } else {
+        setMessage(data.message || data.error);
+      }
+    } catch (err) {
+      setMessage("Something went wrong!");
+    }
   };
 
   return (
@@ -42,6 +54,17 @@ function App() {
       </form>
       <p>{message}</p>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Login />} />             {/* Default login page */}
+        <Route path="/add-employee" element={<AddEmployee />} />  {/* Employee form */}
+      </Routes>
+    </Router>
   );
 }
 
