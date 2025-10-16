@@ -21,23 +21,31 @@ DB_PASS = os.getenv("DB_PASS", "Sharks@2709")
 
 @app.post("/login")
 async def login(request: Request):
-    data = await request.json()
-    email = data.get("email")
-    password = data.get("password")
+    try:
+        data = await request.json()
+        email = data.get("email")
+        password = data.get("password")
 
-    conn = psycopg2.connect(
-        host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS
-    )
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE email=%s AND password=%s", (email, password))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS,
+            sslmode="require"
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email=%s AND password=%s", (email, password))
+        user = cur.fetchone()
+        cur.close()
+        conn.close()
 
-    if user:
-        return {"message": "Login successful!"}
-    else:
-        return {"message": "Invalid email or password."}
+        if user:
+            return {"message": "Login successful!"}
+        else:
+            return {"message": "Invalid email or password."}
+
+    except Exception as e:
+        return {"error": str(e)}  # 👈 shows actual reason instead of 500
 
 
 @app.get("/")
