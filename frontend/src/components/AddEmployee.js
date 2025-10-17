@@ -59,7 +59,7 @@ export default function AddEmployee() {
     formData.append("email", email);
     formData.append("position", position);
     if (file) formData.append("file", file);
-    if (compressedFile) formData.append("compressedFile", compressedFile);
+    if (compressedFile) formData.append("compressed_file", compressedFile); // match backend
 
     try {
       const res = await fetch("https://development-p6rb.onrender.com/add-employee", {
@@ -134,7 +134,7 @@ export default function AddEmployee() {
           <input
             type="file"
             accept="application/pdf"
-            onChange={handleCompressedUpload}
+            onChange={(e) => setFile(e.target.files[0])}
             ref={compressedInputRef}
             style={styles.fileInput}
           />
