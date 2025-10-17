@@ -134,7 +134,7 @@ export default function AddEmployee() {
           <input
             type="file"
             accept="application/pdf"
-            onChange={(e) => setFile(e.target.files[0])}
+            onChange={handleCompressedUpload}
             ref={compressedInputRef}
             style={styles.fileInput}
           />
