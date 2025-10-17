@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from "react";
-
+import { PDFDocument } from "pdf-lib";
 
 export default function AddEmployee() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [position, setPosition] = useState("");
   const [file, setFile] = useState(null);
+  const [compressedFile, setCompressedFile] = useState(null);
   const [message, setMessage] = useState("");
   const [employees, setEmployees] = useState([]);
   const fileInputRef = useRef();
+  const compressedInputRef = useRef();
 
   useEffect(() => {
     fetchEmployees();
@@ -24,6 +26,31 @@ export default function AddEmployee() {
     }
   };
 
+  // Compress PDF file
+  const handleCompressedUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      alert("Please upload only PDF files");
+      return;
+    }
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(arrayBuffer);
+      const compressedBytes = await pdfDoc.save({ useObjectStreams: true });
+      const newFile = new File([compressedBytes], `compressed_${file.name}`, {
+        type: "application/pdf",
+      });
+      setCompressedFile(newFile);
+      alert("✅ PDF compressed successfully!");
+    } catch (error) {
+      console.error("Error compressing PDF:", error);
+      alert("❌ Failed to compress PDF");
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -31,7 +58,8 @@ export default function AddEmployee() {
     formData.append("name", name);
     formData.append("email", email);
     formData.append("position", position);
-    formData.append("file", file);
+    if (file) formData.append("file", file);
+    if (compressedFile) formData.append("compressedFile", compressedFile);
 
     try {
       const res = await fetch("https://development-p6rb.onrender.com/add-employee", {
@@ -40,30 +68,28 @@ export default function AddEmployee() {
       });
 
       const data = await res.json();
-      setMessage(data.message || data.error);
+      setMessage(data.message || data.error || "Uploaded successfully!");
+
+      // reset form
+      setName("");
+      setEmail("");
+      setPosition("");
+      setFile(null);
+      setCompressedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (compressedInputRef.current) compressedInputRef.current.value = "";
+
+      fetchEmployees();
     } catch (err) {
       console.error(err);
       setMessage("Something went wrong!");
     }
-
-    // Reset form
-    setName("");
-    setEmail("");
-    setPosition("");
-    setFile(null);
-
-    if (fileInputRef.current) {
-    fileInputRef.current.value = "";
-    }
-    // Refresh employee table
-    fetchEmployees();
   };
 
   return (
     <div style={styles.container}>
       <h2 style={styles.heading}>Add Employee</h2>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} style={styles.form}>
         <input
           type="text"
@@ -89,18 +115,38 @@ export default function AddEmployee() {
           required
           style={styles.input}
         />
-        <input
-          type="file"
-          onChange={(e) => setFile(e.target.files[0])}
-          style={styles.fileInput}
-          ref={fileInputRef}
-        />
-        <button type="submit" style={styles.button}>Add Employee</button>
+
+        {/* Normal Upload */}
+        <div>
+          <label style={styles.label}>Upload Normal PDF:</label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => setFile(e.target.files[0])}
+            ref={fileInputRef}
+            style={styles.fileInput}
+          />
+        </div>
+
+        {/* Compressed Upload */}
+        <div>
+          <label style={styles.label}>Upload & Compress PDF:</label>
+          <input
+            type="file"
+            accept="application/pdf"
+            onChange={handleCompressedUpload}
+            ref={compressedInputRef}
+            style={styles.fileInput}
+          />
+        </div>
+
+        <button type="submit" style={styles.button}>
+          Add Employee
+        </button>
       </form>
 
       {message && <p style={styles.message}>{message}</p>}
 
-      {/* Employee Table */}
       <h3 style={styles.tableHeading}>Employee List</h3>
       <div style={styles.tableContainer}>
         <table style={styles.table}>
@@ -110,6 +156,7 @@ export default function AddEmployee() {
               <th style={styles.th}>Email</th>
               <th style={styles.th}>Position</th>
               <th style={styles.th}>File</th>
+              <th style={styles.th}>Compressed File</th>
             </tr>
           </thead>
           <tbody>
@@ -127,6 +174,15 @@ export default function AddEmployee() {
                     "No File"
                   )}
                 </td>
+                <td style={styles.td}>
+                  {emp.compressed_file_url ? (
+                    <a href={emp.compressed_file_url} target="_blank" rel="noopener noreferrer" style={styles.link}>
+                      View File
+                    </a>
+                  ) : (
+                    "No File"
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -135,7 +191,6 @@ export default function AddEmployee() {
     </div>
   );
 }
-
 // Styles
 const styles = {
   container: {
