@@ -56,81 +56,116 @@ async def add_employee(
     email: str = Form(...),
     position: str = Form(...),
     file: UploadFile = File(None),
+    compressed_file: UploadFile = File(None),
 ):
     try:
         debug = {}
         file_url = None
+        compressed_file_url = None
 
-        # 0) Basic request debug
         debug["received_name"] = name
         debug["received_email"] = email
         debug["received_position"] = position
         debug["file_provided"] = bool(file)
+        debug["compressed_file_provided"] = bool(compressed_file)
 
-        # 1) If no file provided, just insert with file_url = None
-        if not file:
-            debug["note"] = "No file provided; inserting row with file_url = null"
-        else:
-            # Report file metadata
+        # ---------------- NORMAL FILE UPLOAD ----------------
+        if file:
             debug["file_filename"] = file.filename
             debug["file_content_type"] = file.content_type
-
-            # Read file bytes (once)
             file_bytes = await file.read()
             debug["file_size_bytes"] = len(file_bytes)
 
-            # prepare safe unique filename
             ts = int(time.time())
             safe_filename = f"{ts}_{quote(file.filename)}"
             upload_path = safe_filename
 
-            # Method A: try binary POST to /storage/v1/object/{bucket}/{path}
             upload_url_A = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{upload_path}"
             headers_A = {
                 "apikey": SUPABASE_KEY,
                 "Authorization": f"Bearer {SUPABASE_KEY}",
                 "Content-Type": file.content_type or "application/octet-stream",
             }
+
             try:
                 resA = requests.post(upload_url_A, headers=headers_A, data=file_bytes, timeout=30)
-                debug["upload_A_status"] = resA.status_code
-                debug["upload_A_text"] = resA.text[:1000]
+                debug["normal_upload_A_status"] = resA.status_code
                 if resA.status_code in (200, 201):
                     file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path}"
-                    debug["upload_method"] = "A"
+                    debug["normal_upload_method"] = "A"
                 else:
-                    debug["upload_A_failed"] = True
+                    debug["normal_upload_A_failed"] = True
             except Exception as e:
-                debug["upload_A_exception"] = str(e)
+                debug["normal_upload_A_exception"] = str(e)
 
-            # If Method A failed, try Method B: multipart form upload to /storage/v1/object/{bucket}
             if not file_url:
                 upload_url_B = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}"
                 headers_B = {
                     "apikey": SUPABASE_KEY,
                     "Authorization": f"Bearer {SUPABASE_KEY}",
-                    # do not set Content-Type here; requests will set boundary for multipart
                 }
-                files = {
-                    "file": (safe_filename, file_bytes, file.content_type or "application/octet-stream")
-                }
+                files = {"file": (safe_filename, file_bytes, file.content_type or "application/octet-stream")}
                 try:
                     resB = requests.post(upload_url_B, headers=headers_B, files=files, timeout=30)
-                    debug["upload_B_status"] = resB.status_code
-                    debug["upload_B_text"] = resB.text[:1000]
+                    debug["normal_upload_B_status"] = resB.status_code
                     if resB.status_code in (200, 201):
-                        # supabase public URL for this object
                         file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path}"
-                        debug["upload_method"] = "B"
+                        debug["normal_upload_method"] = "B"
                     else:
-                        debug["upload_B_failed"] = True
+                        debug["normal_upload_B_failed"] = True
                 except Exception as e:
-                    debug["upload_B_exception"] = str(e)
+                    debug["normal_upload_B_exception"] = str(e)
 
-            if not file_url:
-                debug["file_upload_overall_failed"] = True
+        # ---------------- COMPRESSED FILE UPLOAD ----------------
+        if compressed_file:
+            debug["compressed_filename"] = compressed_file.filename
+            debug["compressed_content_type"] = compressed_file.content_type
+            comp_bytes = await compressed_file.read()
+            debug["compressed_file_size_bytes"] = len(comp_bytes)
 
-        # 2) Insert employee row (include file_url which may be None)
+            ts2 = int(time.time())
+            safe_comp_filename = f"{ts2}_compressed_{quote(compressed_file.filename)}"
+            upload_path_comp = safe_comp_filename
+
+            upload_url_comp_A = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{upload_path_comp}"
+            headers_comp_A = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": compressed_file.content_type or "application/octet-stream",
+            }
+
+            try:
+                resCompA = requests.post(upload_url_comp_A, headers=headers_comp_A, data=comp_bytes, timeout=30)
+                debug["compressed_upload_A_status"] = resCompA.status_code
+                if resCompA.status_code in (200, 201):
+                    compressed_file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path_comp}"
+                    debug["compressed_upload_method"] = "A"
+                else:
+                    debug["compressed_upload_A_failed"] = True
+            except Exception as e:
+                debug["compressed_upload_A_exception"] = str(e)
+
+            if not compressed_file_url:
+                upload_url_comp_B = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}"
+                headers_comp_B = {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                }
+                files_comp = {
+                    "file": (safe_comp_filename, comp_bytes, compressed_file.content_type or "application/octet-stream")
+                }
+                try:
+                    resCompB = requests.post(upload_url_comp_B, headers=headers_comp_B, files=files_comp, timeout=30)
+                    debug["compressed_upload_B_status"] = resCompB.status_code
+                    if resCompB.status_code in (200, 201):
+                        compressed_file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path_comp}"
+                        debug["compressed_upload_method"] = "B"
+                    else:
+                        debug["compressed_upload_B_failed"] = True
+                except Exception as e:
+                    debug["compressed_upload_B_exception"] = str(e)
+
+        # ---------------- INSERT EMPLOYEE ROW ----------------
         insert_url = f"{SUPABASE_URL}/rest/v1/employees"
         insert_headers = {
             "apikey": SUPABASE_KEY,
@@ -142,7 +177,8 @@ async def add_employee(
             "name": name,
             "email": email,
             "position": position,
-            "file_url": file_url
+            "file_url": file_url,
+            "compressed_file_url": compressed_file_url,  # ✅ new field
         }
 
         insert_res = requests.post(insert_url, headers=insert_headers, json=payload, timeout=30)
