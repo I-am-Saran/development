@@ -180,7 +180,8 @@ async def add_employee(
             "file_url": file_url,
             "compressed_file_url": compressed_file_url,  # ✅ new field
         }
-
+        
+        print("Payload for DB insert:", payload)
         insert_res = requests.post(insert_url, headers=insert_headers, json=payload, timeout=30)
         debug["insert_status"] = insert_res.status_code
         debug["insert_text"] = insert_res.text[:1000]
