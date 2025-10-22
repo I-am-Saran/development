@@ -108,9 +108,7 @@ export default function Login() {
     Login
   </button>
 
-  <p style={{ textAlign: "center", marginTop: "15px", fontSize: "14px", color: "#666" }}>
-    Don’t have an account? <a href="#" style={{ color: "#4F46E5", fontWeight: "bold", textDecoration: "none" }}>Sign up</a>
-  </p>
+  
 </form>
 
       {message && <p>{message}</p>}
