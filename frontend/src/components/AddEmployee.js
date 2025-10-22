@@ -96,7 +96,7 @@ export default function AddEmployee() {
           // Clear local storage or tokens (optional)
           localStorage.clear();
           // Redirect to login page
-          window.location.href = "/login";
+          window.location.href = "/";
         }}
         style={styles.logoutButton}
       >
