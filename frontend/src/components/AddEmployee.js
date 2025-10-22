@@ -117,28 +117,97 @@ export default function AddEmployee() {
         />
 
         {/* Normal Upload */}
-        <div>
-          <label style={styles.label}>Upload Normal PDF:</label>
+        <div
+          style={{
+            background: "#f9fafb",
+            padding: "16px",
+            borderRadius: "12px",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+            marginBottom: "16px",
+            transition: "all 0.3s ease",
+          }}
+        >
+          <label
+            style={{
+              display: "block",
+              fontWeight: "600",
+              fontSize: "14px",
+              color: "#1f2937",
+              marginBottom: "8px",
+            }}
+          >
+            Upload Normal PDF:
+          </label>
           <input
             type="file"
             accept="application/pdf"
             onChange={(e) => setFile(e.target.files[0])}
             ref={fileInputRef}
-            style={styles.fileInput}
+            style={{
+              width: "100%",
+              padding: "10px",
+              border: "2px dashed #9ca3af",
+              borderRadius: "10px",
+              background: "#fff",
+              cursor: "pointer",
+              transition: "border-color 0.3s ease, background 0.3s ease",
+            }}
+            onMouseOver={(e) => {
+              e.target.style.borderColor = "#2563eb";
+              e.target.style.background = "#f0f9ff";
+            }}
+            onMouseOut={(e) => {
+              e.target.style.borderColor = "#9ca3af";
+              e.target.style.background = "#fff";
+            }}
           />
         </div>
 
         {/* Compressed Upload */}
-        <div>
-          <label style={styles.label}>Upload & Compress PDF:</label>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={handleCompressedUpload}
-            ref={compressedInputRef}
-            style={styles.fileInput}
-          />
-        </div>
+        <div
+  style={{
+    background: "#f9fafb",
+    padding: "16px",
+    borderRadius: "12px",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+    transition: "all 0.3s ease",
+  }}
+>
+  <label
+    style={{
+      display: "block",
+      fontWeight: "600",
+      fontSize: "14px",
+      color: "#1f2937",
+      marginBottom: "8px",
+    }}
+  >
+    Upload & Compress PDF:
+  </label>
+  <input
+    type="file"
+    accept="application/pdf"
+    onChange={handleCompressedUpload}
+    ref={compressedInputRef}
+    style={{
+      width: "100%",
+      padding: "10px",
+      border: "2px dashed #9ca3af",
+      borderRadius: "10px",
+      background: "#fff",
+      cursor: "pointer",
+      transition: "border-color 0.3s ease, background 0.3s ease",
+    }}
+    onMouseOver={(e) => {
+      e.target.style.borderColor = "#2563eb";
+      e.target.style.background = "#f0f9ff";
+    }}
+    onMouseOut={(e) => {
+      e.target.style.borderColor = "#9ca3af";
+      e.target.style.background = "#fff";
+    }}
+  />
+</div>
 
         <button type="submit" style={styles.button}>
           Add Employee
