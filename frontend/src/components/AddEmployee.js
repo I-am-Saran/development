@@ -88,8 +88,21 @@ export default function AddEmployee() {
 
   return (
     <div style={styles.container}>
+      {/* Header with Logout button */}
+    <div style={styles.header}>
       <h2 style={styles.heading}>Add Employee</h2>
-
+      <button
+        onClick={() => {
+          // Clear local storage or tokens (optional)
+          localStorage.clear();
+          // Redirect to login page
+          window.location.href = "/login";
+        }}
+        style={styles.logoutButton}
+      >
+        Logout
+      </button>
+        </div>
       <form onSubmit={handleSubmit} style={styles.form}>
         <input
           type="text"
@@ -335,5 +348,21 @@ const styles = {
     color: "#0070f3",
     textDecoration: "none",
     fontWeight: "bold",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
+  },
+  logoutButton: {
+    padding: "8px 16px",
+    backgroundColor: "#ff4d4d",
+    color: "#fff",
+    border: "none",
+    borderRadius: "5px",
+    fontSize: "14px",
+    cursor: "pointer",
+    transition: "background-color 0.3s",
   },
 };
