@@ -138,6 +138,7 @@ export default function AddEmployee() {
             boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
             marginBottom: "16px",
             transition: "all 0.3s ease",
+            width: "300px",
           }}
         >
           <label
@@ -157,7 +158,7 @@ export default function AddEmployee() {
             onChange={(e) => setFile(e.target.files[0])}
             ref={fileInputRef}
             style={{
-              width: "100%",
+              width: "60%",
               padding: "10px",
               border: "2px dashed #9ca3af",
               borderRadius: "10px",
@@ -184,6 +185,7 @@ export default function AddEmployee() {
     borderRadius: "12px",
     boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
     transition: "all 0.3s ease",
+    width: "300px",
   }}
 >
   <label
@@ -203,7 +205,7 @@ export default function AddEmployee() {
     onChange={handleCompressedUpload}
     ref={compressedInputRef}
     style={{
-      width: "100%",
+      width: "60%",
       padding: "10px",
       border: "2px dashed #9ca3af",
       borderRadius: "10px",
@@ -223,7 +225,7 @@ export default function AddEmployee() {
 </div>
 
         <button type="submit" style={styles.button}>
-          Add Employee
+          <b>Add Employee</b>
         </button>
       </form>
 
@@ -300,13 +302,15 @@ const styles = {
     borderRadius: "5px",
     border: "1px solid #ccc",
     fontSize: "16px",
+    width: "300px",
   },
   fileInput: {
     fontSize: "16px",
   },
   button: {
     padding: "12px",
-    backgroundColor: "#08f300ff",
+    width: "200px",
+    backgroundColor: "#3a7bc5ff",
     color: "#fff",
     border: "none",
     borderRadius: "5px",
@@ -334,7 +338,7 @@ const styles = {
   th: {
     textAlign: "left",
     padding: "10px",
-    backgroundColor: "#0070f3",
+    backgroundColor: "#676868ff",
     color: "#fff",
   },
   td: {
