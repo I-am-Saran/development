@@ -10,6 +10,7 @@ from io import BytesIO
 import logging
 
 app = FastAPI()
+logging.basicConfig(level=logging.INFO)
 
 # Allow frontend communication (update with your frontend URL later)
 app.add_middleware(
@@ -244,8 +245,6 @@ async def get_employees():
         print("GET /employees exception:", str(e))
         return {"error": str(e)}
 
-# Set up logging to print logs to the console
-logging.basicConfig(level=logging.DEBUG)
 
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
