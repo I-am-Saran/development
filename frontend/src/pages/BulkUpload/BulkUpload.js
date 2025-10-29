@@ -19,7 +19,7 @@ const BulkUpload = () => {
     formData.append('excel_file', file);
 
     try {
-      const res = await fetch('https://your-backend-url/bulk_upload', {
+      const res = await fetch('https://development-p6rb.onrender.com/bulk_upload', {
         method: 'POST',
         body: formData,
       });
