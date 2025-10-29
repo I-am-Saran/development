@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PDFDocument } from "pdf-lib";
 
+
 export default function AddEmployee() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -52,45 +53,60 @@ export default function AddEmployee() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    const formData = new FormData();
-    formData.append("name", name);
-    formData.append("email", email);
-    formData.append("position", position);
-    if (file) formData.append("file", file);
-    if (compressedFile) formData.append("compressed_file", compressedFile); // match backend
+  const formData = new FormData();
+  formData.append("name", name);
+  formData.append("email", email);
+  formData.append("position", position);
+  if (file) formData.append("file", file);
+  if (compressedFile) formData.append("compressed_file", compressedFile);
+  if (bulkFiles.length > 0) {
+  bulkFiles.forEach((f) => {
+    formData.append("bulk_files", f);
+  });
+}
 
-    try {
-      const res = await fetch("https://development-p6rb.onrender.com/add-employee", {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      setMessage(data.message || data.error || "Uploaded successfully!");
-
-      // reset form
-      setName("");
-      setEmail("");
-      setPosition("");
-      setFile(null);
-      setCompressedFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      if (compressedInputRef.current) compressedInputRef.current.value = "";
-
-      fetchEmployees();
-    } catch (err) {
-      console.error(err);
-      setMessage("Something went wrong!");
+  try {
+    console.log("Bulk files added:", bulkFiles.map(f => f.name));
+    for (let pair of formData.entries()) {
+      console.log(pair[0], pair[1]);
     }
-  };
+    
+    const res = await fetch("https://development-p6rb.onrender.com/add-employee", {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await res.json();
+    setMessage(data.message || data.error || "Uploaded successfully!");
+
+    // reset
+    setName("");
+    setEmail("");
+    setPosition("");
+    setFile(null);
+    setCompressedFile(null);
+    setBulkFiles([]);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (compressedInputRef.current) compressedInputRef.current.value = "";
+    if (bulkInputRef.current) bulkInputRef.current.value = "";
+
+    fetchEmployees();
+  } catch (err) {
+    console.error(err);
+    setMessage("Something went wrong!");
+  }
+};
+
+  const [bulkFiles, setBulkFiles] = useState([]);
+  const bulkInputRef = useRef();
 
   return (
     <div style={styles.container}>
       {/* Header with Logout button */}
     <div style={styles.header}>
-      <h2 style={styles.heading}>Add Employee</h2>
+      <h2 style={styles.heading}>Add Employee Form</h2>
       <button
         onClick={() => {
           // Clear local storage or tokens (optional)
@@ -224,6 +240,58 @@ export default function AddEmployee() {
   />
 </div>
 
+{/* Bulk Upload Section */}
+<div
+  style={{
+    background: "#f9fafb",
+    padding: "16px",
+    borderRadius: "12px",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+    transition: "all 0.3s ease",
+    width: "300px",
+  }}
+>
+  <label
+    style={{
+      display: "block",
+      fontWeight: "600",
+      fontSize: "14px",
+      color: "#1f2937",
+      marginBottom: "8px",
+    }}
+  >
+    Upload Multiple Files (Bulk Upload):
+  </label>
+  <input
+    type="file"
+    multiple
+    accept="application/pdf"
+    name="bulk_files"
+    onChange={(e) => setBulkFiles(Array.from(e.target.files))}
+    ref={bulkInputRef}
+    style={{
+      width: "60%",
+      padding: "10px",
+      border: "2px dashed #9ca3af",
+      borderRadius: "10px",
+      background: "#fff",
+      cursor: "pointer",
+      transition: "border-color 0.3s ease, background 0.3s ease",
+    }}
+    onMouseOver={(e) => {
+      e.target.style.borderColor = "#2563eb";
+      e.target.style.background = "#f0f9ff";
+    }}
+    onMouseOut={(e) => {
+      e.target.style.borderColor = "#9ca3af";
+      e.target.style.background = "#fff";
+    }}
+  />
+</div>
+
+
+
+
         <button type="submit" style={styles.button}>
           <b>Add Employee</b>
         </button>
@@ -309,14 +377,15 @@ const styles = {
   },
   button: {
     padding: "12px",
-    width: "200px",
-    backgroundColor: "#3a7bc5ff",
-    color: "#fff",
-    border: "none",
-    borderRadius: "5px",
-    fontSize: "16px",
-    cursor: "pointer",
-    transition: "background-color 0.3s",
+  width: "200px",
+  backgroundColor: "#1d5c39ff",
+  color: "#fff",
+  border: "none",
+  borderRadius: "5px",
+  fontSize: "16px",
+  cursor: "pointer",
+  transition: "all 0.3s ease",
+  boxShadow: "0 5px 0 #144c2f"
   },
   message: {
     color: "green",
@@ -369,4 +438,5 @@ const styles = {
     cursor: "pointer",
     transition: "background-color 0.3s",
   },
+  
 };
