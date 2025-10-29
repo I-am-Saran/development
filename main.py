@@ -1,19 +1,17 @@
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-import time, requests, json, io, csv, openpyxl, logging
+from supabase import create_client, Client
+import time, requests, json, logging
 from urllib.parse import quote
 import pandas as pd
 from io import BytesIO
-from supabase import create_client, Client
 
-# Initialize FastAPI app
+# Initialize FastAPI
 app = FastAPI()
-
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 
-# Allow frontend requests
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,16 +20,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Supabase Configuration ---
+# --- Supabase credentials ---
 SUPABASE_URL = "https://nzqzhpeccenmgglkcmhi.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cXpocGVjY2VubWdnbGtjbWhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2NzAzMSwiZXhwIjoyMDc2MDQzMDMxfQ.z5qf6unizb_KaF8YKpc60V2jsP54v-NsKclDW9zfYEU"
 
-# ✅ Define Supabase client (fix for “name 'supabase' is not defined”)
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# ✅ Initialize Supabase client globally and safely
+supabase: Client | None = None
 
+try:
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    logging.info("✅ Supabase client created successfully")
+except Exception as e:
+    logging.error(f"❌ Failed to initialize Supabase client: {e}")
 
 # --------------------------------------------------------------------------
-# ✅ Keep your existing routes exactly as they were
+# ✅ Existing routes untouched
 # --------------------------------------------------------------------------
 
 @app.get("/")
@@ -82,22 +85,24 @@ async def login(request: Request):
 
 
 # --------------------------------------------------------------------------
-# ✅ Updated Bulk Upload API (fixed version)
+# ✅ Fixed Bulk Upload (Supabase now guaranteed accessible)
 # --------------------------------------------------------------------------
 
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
+    global supabase  # ensure we’re referring to the global instance
     try:
+        if supabase is None:
+            raise RuntimeError("Supabase client not initialized properly")
+
         # Validate file type
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             logging.error(f"Invalid file type: {file.content_type}")
             return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
 
-        # Read Excel content
+        # Read Excel
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
-
-        # Clean headers and ensure consistent format
         df.columns = [str(col).strip().replace(" ", "_") for col in df.columns]
 
         required_columns = ["First_Name", "Last_Name", "Gender", "Country", "Age", "Date", "Id"]
@@ -108,13 +113,12 @@ async def bulk_upload(file: UploadFile = File(...)):
                 content={"error": f"Missing required columns: {', '.join(missing)}"},
             )
 
-        # Convert date columns if present
         if "Date" in df.columns:
             df["Date"] = df["Date"].astype(str)
 
         records = df.to_dict(orient="records")
 
-        # ✅ Insert data into your Supabase table
+        # ✅ Insert to Supabase
         response = supabase.table("employee_bulk_imports").insert(records).execute()
 
         if hasattr(response, "error") and response.error:
@@ -133,4 +137,3 @@ async def bulk_upload(file: UploadFile = File(...)):
     except Exception as e:
         logging.error(f"Bulk upload failed: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
