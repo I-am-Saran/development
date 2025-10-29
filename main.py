@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import time, requests, json
 from urllib.parse import quote
 from supabase import create_client, Client
+from fastapi.responses import JSONResponse
+import pandas as pd
+from io import BytesIO
+
 app = FastAPI()
 
 # Allow frontend communication (update with your frontend URL later)
@@ -237,3 +241,25 @@ async def get_employees():
     except Exception as e:
         print("GET /employees exception:", str(e))
         return {"error": str(e)}
+
+
+
+@app.post("/bulk_upload")
+async def bulk_upload(file: UploadFile = File(...)):
+    try:
+        # Read the Excel file
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))  # Read into a pandas DataFrame
+
+        # Optional: You can print the DataFrame or check its contents here for debugging
+        print(df)
+
+        # Convert the DataFrame into JSON (or process the data as needed)
+        data_json = df.to_dict(orient="records")
+
+        # You can now insert the data into your Supabase DB, for example:
+        # For simplicity, let's just return the data as is
+        return JSONResponse(content={"message": "Data processed successfully", "data": data_json})
+
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
