@@ -1,11 +1,10 @@
-from fastapi import FastAPI, Request, File, UploadFile, Form
+from fastapi import FastAPI, Request, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from supabase import create_client, Client
-import time, requests, json, logging
-from urllib.parse import quote
 import pandas as pd
 from io import BytesIO
+import logging
+import requests
 
 # Initialize FastAPI
 app = FastAPI()
@@ -24,38 +23,38 @@ app.add_middleware(
 SUPABASE_URL = "https://nzqzhpeccenmgglkcmhi.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cXpocGVjY2VubWdnbGtjbWhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2NzAzMSwiZXhwIjoyMDc2MDQzMDMxfQ.z5qf6unizb_KaF8YKpc60V2jsP54v-NsKclDW9zfYEU"
 
-# ✅ Initialize Supabase client globally and safely
-supabase: Client | None = None
-
-try:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    logging.info("✅ Supabase client created successfully")
-except Exception as e:
-    logging.error(f"❌ Failed to initialize Supabase client: {e}")
+HEADERS = {
+    "apikey": SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type": "application/json",
+}
 
 # --------------------------------------------------------------------------
-# ✅ Existing routes untouched
+# ✅ Root route
 # --------------------------------------------------------------------------
 
 @app.get("/")
 async def root():
     return {"message": "Backend running successfully"}
 
+# --------------------------------------------------------------------------
+# ✅ Get employees
+# --------------------------------------------------------------------------
 
 @app.get("/employees")
 async def get_employees():
     try:
         url = f"{SUPABASE_URL}/rest/v1/employees"
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-        }
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=HEADERS)
+        response.raise_for_status()
         return response.json()
     except Exception as e:
         logging.error(f"Error fetching employees: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+# --------------------------------------------------------------------------
+# ✅ Login route
+# --------------------------------------------------------------------------
 
 @app.post("/login")
 async def login(request: Request):
@@ -68,12 +67,8 @@ async def login(request: Request):
             return JSONResponse(status_code=400, content={"error": "Email and password required"})
 
         url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
-        headers = {
-            "apikey": SUPABASE_KEY,
-            "Content-Type": "application/json",
-        }
         payload = {"email": email, "password": password}
-        response = requests.post(url, headers=headers, json=payload)
+        response = requests.post(url, headers=HEADERS, json=payload)
 
         if response.status_code != 200:
             return JSONResponse(status_code=response.status_code, content={"error": "Invalid credentials"})
@@ -83,24 +78,16 @@ async def login(request: Request):
         logging.error(f"Login error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-
 # --------------------------------------------------------------------------
-# ✅ Fixed Bulk Upload (Supabase now guaranteed accessible)
+# ✅ Bulk upload (REST API version)
 # --------------------------------------------------------------------------
 
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
-    global supabase  # ensure we’re referring to the global instance
     try:
-        if supabase is None:
-            raise RuntimeError("Supabase client not initialized properly")
-
-        # Validate file type
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-            logging.error(f"Invalid file type: {file.content_type}")
             return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
 
-        # Read Excel
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
         df.columns = [str(col).strip().replace(" ", "_") for col in df.columns]
@@ -118,18 +105,17 @@ async def bulk_upload(file: UploadFile = File(...)):
 
         records = df.to_dict(orient="records")
 
-        # ✅ Insert to Supabase
-        response = supabase.table("employee_bulk_imports").insert(records).execute()
+        # Insert records into Supabase via REST
+        url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
+        response = requests.post(url, headers=HEADERS, json=records)
 
-        if hasattr(response, "error") and response.error:
-            raise Exception(str(response.error))
-
-        inserted_count = len(response.data) if response.data else len(records)
-        logging.info(f"Inserted {inserted_count} rows into employee_bulk_imports successfully.")
+        if response.status_code not in (200, 201):
+            logging.error(f"Supabase insert failed: {response.text}")
+            return JSONResponse(status_code=response.status_code, content={"error": response.text})
 
         return JSONResponse(
             content={
-                "message": f"✅ Successfully inserted {inserted_count} rows into employee_bulk_imports",
+                "message": f"✅ Successfully inserted {len(records)} rows into employee_bulk_imports",
                 "status": "success",
             }
         )
