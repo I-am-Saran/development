@@ -1,13 +1,13 @@
-fastapi==0.119.0
-uvicorn==0.37.0
-psycopg2-binary==2.9.11
-python-dotenv==1.1.0
-pydantic==2.11.4
-starlette==0.48.0
+fastapi
+uvicorn
+psycopg2-binary
+python-dotenv
+pydantic
+starlette
 requests
 python-multipart
-supabase==2.4.0
-bleach==6.0.0
+supabase
+bleach
 python-magic   # Windows-friendly file type check (use python-magic for Linux)
 pandas  # Add this for Excel file handling
 openpyxl
