@@ -8,6 +8,6 @@ requests
 python-multipart
 supabase==2.4.0
 bleach==6.0.0
-python-magic-bin==0.4.14   # Windows-friendly file type check (use python-magic for Linux)
+python-magic   # Windows-friendly file type check (use python-magic for Linux)
 pandas  # Add this for Excel file handling
 openpyxl
