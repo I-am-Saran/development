@@ -1,16 +1,14 @@
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-import time, requests, json
+import time, requests, json, io, csv, openpyxl, logging
 from urllib.parse import quote
-from supabase import create_client, Client
 from fastapi.responses import JSONResponse
-import openpyxl
 import pandas as pd
 from io import BytesIO
-import logging
+from supabase import create_client, Client
 
 app = FastAPI()
-logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logging.basicConfig(level=logging.INFO)
 
 # Allow frontend communication (update with your frontend URL later)
 app.add_middleware(
