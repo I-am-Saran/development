@@ -4,6 +4,7 @@ import time, requests, json
 from urllib.parse import quote
 from supabase import create_client, Client
 from fastapi.responses import JSONResponse
+import openpyxl
 import pandas as pd
 from io import BytesIO
 
@@ -242,24 +243,36 @@ async def get_employees():
         print("GET /employees exception:", str(e))
         return {"error": str(e)}
 
-
+# Set up logging to print logs to the console
+logging.basicConfig(level=logging.DEBUG)
 
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
     try:
-        # Read the Excel file
+        # Validate file type - only allow .xlsx
+        if file.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            logging.error(f"Invalid file type: {file.content_type}")
+            return JSONResponse(status_code=422, content={"error": "Invalid file type, only .xlsx files are allowed"})
+
+        # Debugging file details
+        logging.info(f"Received file: {file.filename} with content type {file.content_type}")
+
+        # Read the Excel file into a pandas DataFrame
         contents = await file.read()
-        df = pd.read_excel(BytesIO(contents))  # Read into a pandas DataFrame
+        df = pd.read_excel(BytesIO(contents))  # Read into pandas DataFrame
 
-        # Optional: You can print the DataFrame or check its contents here for debugging
-        print(df)
+        # Debug: Check DataFrame shape and first few rows
+        logging.info(f"DataFrame shape: {df.shape}")
+        logging.info(f"DataFrame preview: {df.head()}")
 
-        # Convert the DataFrame into JSON (or process the data as needed)
+        # Convert the DataFrame into a list of dictionaries (JSON format)
         data_json = df.to_dict(orient="records")
 
-        # You can now insert the data into your Supabase DB, for example:
-        # For simplicity, let's just return the data as is
+        # You can insert this data into your Supabase DB, etc.
+        # For now, we will return the data as a JSON response
+
         return JSONResponse(content={"message": "Data processed successfully", "data": data_json})
 
     except Exception as e:
-        return JSONResponse(status_code=400, content={"error": str(e)})
+        logging.error(f"Error while processing the file: {str(e)}")
+        return JSONResponse(status_code=400, content={"error": f"An error occurred: {str(e)}"})
