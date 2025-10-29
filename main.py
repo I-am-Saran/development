@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 import openpyxl
 import pandas as pd
 from io import BytesIO
+import logging
 
 app = FastAPI()
 
