@@ -16,7 +16,7 @@ const BulkUpload = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData();
-    formData.append('excel_file', file);
+    formData.append('file', file);
 
     try {
       const res = await fetch('https://development-p6rb.onrender.com/bulk_upload', {
