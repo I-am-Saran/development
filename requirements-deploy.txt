@@ -6,8 +6,8 @@ pydantic==2.11.4
 starlette==0.48.0
 requests
 python-multipart
-supabase-py==2.4.0    # ✅ Correct package for Python Supabase client
+supabase==2.4.0
 bleach==6.0.0
-python-magic          # Windows-friendly file type check
-pandas                # For Excel handling
-openpyxl              # Required for reading Excel files
+python-magic   # Windows-friendly file type check (use python-magic for Linux)
+pandas  # Add this for Excel file handling
+openpyxl
