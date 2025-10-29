@@ -85,6 +85,71 @@ async def login(request: Request):
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
     try:
+        # Validate file type
+        if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
+
+        # Read Excel
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+
+        # Clean headers
+        df.columns = [str(col).strip().replace(" ", "_").lower() for col in df.columns]
+        logging.info(f"Excel columns detected: {df.columns.tolist()}")
+
+        # Map Excel headers to DB columns
+        column_mapping = {
+            "first_name": "first_name",
+            "last_name": "last_name",
+            "gender": "gender",
+            "country": "country",
+            "age": "age",
+            "date": "date_of_event",
+            "date_of_event": "date_of_event",
+            "id": "external_id",
+            "external_id": "external_id",
+        }
+
+        # Rename Excel columns to match DB schema
+        df.rename(columns=column_mapping, inplace=True)
+
+        # Check for required fields
+        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
+        missing = [col for col in required if col not in df.columns]
+        if missing:
+            return JSONResponse(status_code=400, content={"error": f"Missing required columns: {', '.join(missing)}"})
+
+        # Convert date columns to string if needed
+        if "date_of_event" in df.columns:
+            df["date_of_event"] = pd.to_datetime(df["date_of_event"], errors="coerce").astype(str)
+
+        records = df.to_dict(orient="records")
+
+        # ✅ Insert into Supabase via REST API
+        url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+
+        response = requests.post(url, headers=headers, json=records)
+
+        if response.status_code not in (200, 201):
+            logging.error(f"Supabase insert failed: {response.text}")
+            return JSONResponse(status_code=response.status_code, content={"error": response.text})
+
+        inserted_count = len(response.json())
+        return JSONResponse(
+            content={"message": f"✅ Successfully inserted {inserted_count} rows into employee_bulk_imports", "status": "success"}
+        )
+
+    except Exception as e:
+        logging.error(f"Bulk upload failed: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+    try:
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
 
