@@ -2,7 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./components/Login";
 import AddEmployee from "./components/AddEmployee";
-import BulkUpload from "./BulkUpload/BulkUpload";
+import BulkUpload from "./pages/BulkUpload/BulkUpload";
 
 function App() {
   return (
