@@ -6,3 +6,4 @@ pydantic==2.11.4
 starlette==0.48.0
 requests
 python-multipart
+supabase==2.4.0
