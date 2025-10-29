@@ -1,16 +1,16 @@
-from fastapi import FastAPI, Request, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import time, requests, json, io, csv, openpyxl, logging
-from urllib.parse import quote
 from fastapi.responses import JSONResponse
+from supabase import create_client, Client
 import pandas as pd
 from io import BytesIO
-from supabase import create_client, Client
+import logging
 
+# Initialize FastAPI
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
 
-# Allow frontend communication (update with your frontend URL later)
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,10 +19,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Supabase REST API credentials ---
-SUPABASE_URL = "https://nzqzhpeccenmgglkcmhi.supabase.co"  # replace with your Supabase URL
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cXpocGVjY2VubWdnbGtjbWhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2NzAzMSwiZXhwIjoyMDc2MDQzMDMxfQ.z5qf6unizb_KaF8YKpc60V2jsP54v-NsKclDW9zfYEU"  # replace with your Supabase Service Role Key
-SUPABASE_BUCKET = "employee-files"  # Replace with your actual bucket name in Supabase
+# --- Supabase credentials ---
+SUPABASE_URL = "https://nzqzhpeccenmgglkcmhi.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im56cXpocGVjY2VubWdnbGtjbWhpIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2NzAzMSwiZXhwIjoyMDc2MDQzMDMxfQ.z5qf6unizb_KaF8YKpc60V2jsP54v-NsKclDW9zfYEU"
+SUPABASE_BUCKET = "employee-files"
+
+# ✅ Create Supabase client globally
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 @app.post("/login")
 async def login(request: Request):
@@ -246,6 +250,35 @@ async def get_employees():
 
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
+    try:
+        # Validate file type - only allow Excel
+        if file.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+            return JSONResponse(status_code=422, content={"error": "Invalid file type, only .xlsx files are allowed"})
+
+        logging.info(f"Received file: {file.filename}")
+
+        # Read Excel content into a DataFrame
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+
+        # Clean up column names
+        df.columns = [col.strip() for col in df.columns]
+
+        # Convert DataFrame to dict
+        records = df.to_dict(orient="records")
+
+        # ✅ Insert into your Supabase table
+        response = supabase.table("employee_bulk_imports").insert(records).execute()
+
+        if hasattr(response, "error") and response.error:
+            raise Exception(str(response.error))
+
+        logging.info(f"Inserted {len(records)} records successfully")
+        return JSONResponse(content={"message": "Data uploaded successfully", "rows_inserted": len(records)})
+
+    except Exception as e:
+        logging.error(f"Bulk upload failed: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
     try:
         # 1️⃣ Validate file type (.xlsx only)
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
