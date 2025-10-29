@@ -10,7 +10,7 @@ from io import BytesIO
 import logging
 
 app = FastAPI()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 # Allow frontend communication (update with your frontend URL later)
 app.add_middleware(
@@ -249,30 +249,74 @@ async def get_employees():
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
     try:
-        # Validate file type - only allow .xlsx
+        # 1️⃣ Validate file type (.xlsx only)
+        if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            return JSONResponse(status_code=422, content={"error": "Only .xlsx files are supported."})
+
+        # 2️⃣ Read Excel file
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+
+        # 3️⃣ Clean column names (strip spaces, etc.)
+        df.columns = [c.strip().replace(" ", "_") for c in df.columns]
+
+        # 4️⃣ Check if required columns exist
+        required_columns = ["First_Name", "Last_Name", "Gender", "Country", "Age", "Date", "Id"]
+        missing = [col for col in required_columns if col not in df.columns]
+        if missing:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Missing required columns: {', '.join(missing)}"},
+            )
+
+        # 5️⃣ Convert date fields to string (for Supabase compatibility)
+        if "Date" in df.columns:
+            df["Date"] = df["Date"].astype(str)
+
+        # 6️⃣ Prepare data for insertion
+        records = df.to_dict(orient="records")
+
+        # 7️⃣ Insert each record directly into Supabase table
+        inserted_rows = 0
+        for record in records:
+            response = supabase.table("employee_bulk_imports").insert(record).execute()
+            if response.data:
+                inserted_rows += 1
+
+        # 8️⃣ Return success message
+        return JSONResponse(
+            content={
+                "message": f"✅ Successfully inserted {inserted_rows} rows into employee_bulk_imports",
+                "status": "success",
+            }
+        )
+
+    except Exception as e:
+        logging.error(f"Bulk upload failed: {str(e)}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+    try:
+        # Validate file type
         if file.content_type != 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
             logging.error(f"Invalid file type: {file.content_type}")
             return JSONResponse(status_code=422, content={"error": "Invalid file type, only .xlsx files are allowed"})
 
-        # Debugging file details
-        logging.info(f"Received file: {file.filename} with content type {file.content_type}")
-
-        # Read the Excel file into a pandas DataFrame
         contents = await file.read()
-        df = pd.read_excel(BytesIO(contents))  # Read into pandas DataFrame
-
-        # Debug: Check DataFrame shape and first few rows
-        logging.info(f"DataFrame shape: {df.shape}")
-        logging.info(f"DataFrame preview: {df.head()}")
-
-        # Convert the DataFrame into a list of dictionaries (JSON format)
+        df = pd.read_excel(BytesIO(contents))
         data_json = df.to_dict(orient="records")
 
-        # You can insert this data into your Supabase DB, etc.
-        # For now, we will return the data as a JSON response
+        # Debug logs
+        logging.info(f"Parsed {len(data_json)} records from Excel file")
 
-        return JSONResponse(content={"message": "Data processed successfully", "data": data_json})
+        # Insert into Supabase
+        response = supabase.table("employees_bulk_imports").insert(data_json).execute()
+
+        if response.data:
+            logging.info("Data inserted successfully into Supabase")
+            return JSONResponse(content={"message": "Data uploaded successfully!", "inserted_rows": len(response.data)})
+        else:
+            logging.error(f"Insert failed: {response}")
+            return JSONResponse(status_code=500, content={"error": "Failed to insert data into Supabase"})
 
     except Exception as e:
-        logging.error(f"Error while processing the file: {str(e)}")
+        logging.error(f"Error during bulk upload: {str(e)}")
         return JSONResponse(status_code=400, content={"error": f"An error occurred: {str(e)}"})
