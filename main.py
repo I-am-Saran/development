@@ -1,8 +1,8 @@
 from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
-import time
+import time, requests, json
 from urllib.parse import quote
-import requests
+from supabase import create_client, Client
 app = FastAPI()
 
 # Allow frontend communication (update with your frontend URL later)
@@ -57,115 +57,110 @@ async def add_employee(
     position: str = Form(...),
     file: UploadFile = File(None),
     compressed_file: UploadFile = File(None),
+    bulk_files: list[UploadFile] = File(None),
 ):
     try:
-        debug = {}
-        file_url = None
-        compressed_file_url = None
+        
+        print("\n===== DEBUG: Incoming form data =====")
+        print("Name:", name)
+        print("Email:", email)
+        print("Position:", position)
+        print("File provided:", bool(file))
+        print("Compressed file provided:", bool(compressed_file))
+        print("Bulk files type:", type(bulk_files))
+        print("Bulk files length:", len(bulk_files) if bulk_files else 0)
+        if bulk_files:
+            for bf in bulk_files:
+                print(" - Bulk file name:", bf.filename)
+        print("=====================================\n")
 
-        debug["received_name"] = name
-        debug["received_email"] = email
-        debug["received_position"] = position
-        debug["file_provided"] = bool(file)
-        debug["compressed_file_provided"] = bool(compressed_file)
+
+        debug = {}
+        file_url, compressed_file_url = None, None
+        bulk_file_urls = []
+
+        debug["received_fields"] = {
+            "name": name,
+            "email": email,
+            "position": position,
+            "file_provided": bool(file),
+            "compressed_provided": bool(compressed_file),
+            "bulk_files_count": len(bulk_files) if bulk_files else 0,
+        }
 
         # ---------------- NORMAL FILE UPLOAD ----------------
         if file:
-            debug["file_filename"] = file.filename
-            debug["file_content_type"] = file.content_type
             file_bytes = await file.read()
-            debug["file_size_bytes"] = len(file_bytes)
-
             ts = int(time.time())
             safe_filename = f"{ts}_{quote(file.filename)}"
-            upload_path = safe_filename
+            upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_filename}"
 
-            upload_url_A = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{upload_path}"
-            headers_A = {
+            headers = {
                 "apikey": SUPABASE_KEY,
                 "Authorization": f"Bearer {SUPABASE_KEY}",
                 "Content-Type": file.content_type or "application/octet-stream",
             }
 
-            try:
-                resA = requests.post(upload_url_A, headers=headers_A, data=file_bytes, timeout=30)
-                debug["normal_upload_A_status"] = resA.status_code
-                if resA.status_code in (200, 201):
-                    file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path}"
-                    debug["normal_upload_method"] = "A"
-                else:
-                    debug["normal_upload_A_failed"] = True
-            except Exception as e:
-                debug["normal_upload_A_exception"] = str(e)
+            res = requests.post(upload_url, headers=headers, data=file_bytes, timeout=30)
+            debug["normal_upload_status"] = res.status_code
 
-            if not file_url:
-                upload_url_B = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}"
-                headers_B = {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                }
-                files = {"file": (safe_filename, file_bytes, file.content_type or "application/octet-stream")}
-                try:
-                    resB = requests.post(upload_url_B, headers=headers_B, files=files, timeout=30)
-                    debug["normal_upload_B_status"] = resB.status_code
-                    if resB.status_code in (200, 201):
-                        file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path}"
-                        debug["normal_upload_method"] = "B"
-                    else:
-                        debug["normal_upload_B_failed"] = True
-                except Exception as e:
-                    debug["normal_upload_B_exception"] = str(e)
+            if res.status_code in (200, 201):
+                file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_filename}"
+            else:
+                debug["normal_upload_failed"] = res.text
 
         # ---------------- COMPRESSED FILE UPLOAD ----------------
         if compressed_file:
-            debug["compressed_filename"] = compressed_file.filename
-            debug["compressed_content_type"] = compressed_file.content_type
             comp_bytes = await compressed_file.read()
-            debug["compressed_file_size_bytes"] = len(comp_bytes)
-
             ts2 = int(time.time())
             safe_comp_filename = f"{ts2}_compressed_{quote(compressed_file.filename)}"
-            upload_path_comp = safe_comp_filename
+            upload_url_comp = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_comp_filename}"
 
-            upload_url_comp_A = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{upload_path_comp}"
-            headers_comp_A = {
+            headers_comp = {
                 "apikey": SUPABASE_KEY,
                 "Authorization": f"Bearer {SUPABASE_KEY}",
                 "Content-Type": compressed_file.content_type or "application/octet-stream",
             }
 
-            try:
-                resCompA = requests.post(upload_url_comp_A, headers=headers_comp_A, data=comp_bytes, timeout=30)
-                debug["compressed_upload_A_status"] = resCompA.status_code
-                if resCompA.status_code in (200, 201):
-                    compressed_file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path_comp}"
-                    debug["compressed_upload_method"] = "A"
-                else:
-                    debug["compressed_upload_A_failed"] = True
-            except Exception as e:
-                debug["compressed_upload_A_exception"] = str(e)
+            res_comp = requests.post(upload_url_comp, headers=headers_comp, data=comp_bytes, timeout=30)
+            debug["compressed_upload_status"] = res_comp.status_code
 
-            if not compressed_file_url:
-                upload_url_comp_B = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}"
-                headers_comp_B = {
+            if res_comp.status_code in (200, 201):
+                compressed_file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_comp_filename}"
+            else:
+                debug["compressed_upload_failed"] = res_comp.text
+
+        # ---------------- BULK FILE UPLOADS ----------------
+        if bulk_files:
+            for f in bulk_files:
+                file_bytes = await f.read()
+                ts3 = int(time.time())
+                safe_bulk_name = f"{ts3}_bulk_{quote(f.filename)}"
+                upload_url_bulk = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_bulk_name}"
+
+                headers_bulk = {
                     "apikey": SUPABASE_KEY,
                     "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": f.content_type or "application/octet-stream",
                 }
-                files_comp = {
-                    "file": (safe_comp_filename, comp_bytes, compressed_file.content_type or "application/octet-stream")
-                }
-                try:
-                    resCompB = requests.post(upload_url_comp_B, headers=headers_comp_B, files=files_comp, timeout=30)
-                    debug["compressed_upload_B_status"] = resCompB.status_code
-                    if resCompB.status_code in (200, 201):
-                        compressed_file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{upload_path_comp}"
-                        debug["compressed_upload_method"] = "B"
-                    else:
-                        debug["compressed_upload_B_failed"] = True
-                except Exception as e:
-                    debug["compressed_upload_B_exception"] = str(e)
 
-        # ---------------- INSERT EMPLOYEE ROW ----------------
+                res_bulk = requests.post(upload_url_bulk, headers=headers_bulk, data=file_bytes, timeout=30)
+                debug.setdefault("bulk_upload_response_texts", []).append(res_bulk.text)
+
+                debug.setdefault("bulk_upload_status", []).append(res_bulk.status_code)
+
+                debug.setdefault("bulk_files_received", []).append(f.filename)
+
+
+                if res_bulk.status_code in (200, 201):
+                    bulk_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_bulk_name}"
+                    bulk_file_urls.append(bulk_url)
+                else:
+                    debug.setdefault("bulk_upload_failed_files", []).append(f.filename)
+                    
+        
+
+        # ---------------- INSERT INTO EMPLOYEES TABLE ----------------
         insert_url = f"{SUPABASE_URL}/rest/v1/employees"
         insert_headers = {
             "apikey": SUPABASE_KEY,
@@ -173,27 +168,27 @@ async def add_employee(
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         }
+
         payload = {
             "name": name,
             "email": email,
             "position": position,
             "file_url": file_url,
-            "compressed_file_url": compressed_file_url,  # ✅ new field
+            "compressed_file_url": compressed_file_url,
+            "bulk_file_urls": json.dumps(bulk_file_urls),
         }
-        
-        print("Payload for DB insert:", payload)
+
         insert_res = requests.post(insert_url, headers=insert_headers, json=payload, timeout=30)
-        debug["insert_status"] = insert_res.status_code
-        debug["insert_text"] = insert_res.text[:1000]
+        debug["db_insert_status"] = insert_res.status_code
 
         if insert_res.status_code in (200, 201):
             return {"message": "Employee added successfully!", "debug": debug, "row": insert_res.json()}
         else:
-            return {"error": "DB insert failed", "debug": debug, "db_text": insert_res.text}
+            return {"error": "Database insert failed", "debug": debug, "db_text": insert_res.text}
 
     except Exception as e:
         return {"error": str(e)}
-    
+        
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
