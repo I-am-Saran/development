@@ -257,8 +257,9 @@ async def bulk_upload(file: UploadFile = File(...)):
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
 
-        # 3️⃣ Clean column names (strip spaces, etc.)
-        df.columns = [c.strip().replace(" ", "_") for c in df.columns]
+        # 3️⃣ Clean and normalize column names safely
+        df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+
 
         # 4️⃣ Check if required columns exist
         required_columns = ["First_Name", "Last_Name", "Gender", "Country", "Age", "Date", "Id"]
