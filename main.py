@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import pandas as pd
 from io import BytesIO
-import logging
+import logging, re
 import requests
 
 # Initialize FastAPI
@@ -78,6 +78,169 @@ async def login(request: Request):
         logging.error(f"Login error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+
+@app.post("/add-employee")
+async def add_employee(
+    name: str = Form(...),
+    email: str = Form(...),
+    position: str = Form(...),
+    file: UploadFile = File(None),
+    compressed_file: UploadFile = File(None),
+    bulk_files: list[UploadFile] = File(None),
+):
+    try:
+        
+        print("\n===== DEBUG: Incoming form data =====")
+        print("Name:", name)
+        print("Email:", email)
+        print("Position:", position)
+        print("File provided:", bool(file))
+        print("Compressed file provided:", bool(compressed_file))
+        print("Bulk files type:", type(bulk_files))
+        print("Bulk files length:", len(bulk_files) if bulk_files else 0)
+        if bulk_files:
+            for bf in bulk_files:
+                print(" - Bulk file name:", bf.filename)
+        print("=====================================\n")
+
+
+        debug = {}
+        file_url, compressed_file_url = None, None
+        bulk_file_urls = []
+
+        debug["received_fields"] = {
+            "name": name,
+            "email": email,
+            "position": position,
+            "file_provided": bool(file),
+            "compressed_provided": bool(compressed_file),
+            "bulk_files_count": len(bulk_files) if bulk_files else 0,
+        }
+
+        # ---------------- NORMAL FILE UPLOAD ----------------
+        if file:
+            file_bytes = await file.read()
+            ts = int(time.time())
+            safe_filename = f"{ts}_{quote(file.filename)}"
+            upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_filename}"
+
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": file.content_type or "application/octet-stream",
+            }
+
+            res = requests.post(upload_url, headers=headers, data=file_bytes, timeout=30)
+            debug["normal_upload_status"] = res.status_code
+
+            if res.status_code in (200, 201):
+                file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_filename}"
+            else:
+                debug["normal_upload_failed"] = res.text
+
+        # ---------------- COMPRESSED FILE UPLOAD ----------------
+        if compressed_file:
+            comp_bytes = await compressed_file.read()
+            ts2 = int(time.time())
+            safe_comp_filename = f"{ts2}_compressed_{quote(compressed_file.filename)}"
+            upload_url_comp = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_comp_filename}"
+
+            headers_comp = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": compressed_file.content_type or "application/octet-stream",
+            }
+
+            res_comp = requests.post(upload_url_comp, headers=headers_comp, data=comp_bytes, timeout=30)
+            debug["compressed_upload_status"] = res_comp.status_code
+
+            if res_comp.status_code in (200, 201):
+                compressed_file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_comp_filename}"
+            else:
+                debug["compressed_upload_failed"] = res_comp.text
+
+        # ---------------- BULK FILE UPLOADS ----------------
+        if bulk_files:
+            for f in bulk_files:
+                file_bytes = await f.read()
+                ts3 = int(time.time())
+                safe_bulk_name = f"{ts3}_bulk_{quote(f.filename)}"
+                upload_url_bulk = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{safe_bulk_name}"
+
+                headers_bulk = {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": f.content_type or "application/octet-stream",
+                }
+
+                res_bulk = requests.post(upload_url_bulk, headers=headers_bulk, data=file_bytes, timeout=30)
+                debug.setdefault("bulk_upload_response_texts", []).append(res_bulk.text)
+
+                debug.setdefault("bulk_upload_status", []).append(res_bulk.status_code)
+
+                debug.setdefault("bulk_files_received", []).append(f.filename)
+
+
+                if res_bulk.status_code in (200, 201):
+                    bulk_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{safe_bulk_name}"
+                    bulk_file_urls.append(bulk_url)
+                else:
+                    debug.setdefault("bulk_upload_failed_files", []).append(f.filename)
+                    
+        
+
+        # ---------------- INSERT INTO EMPLOYEES TABLE ----------------
+        insert_url = f"{SUPABASE_URL}/rest/v1/employees"
+        insert_headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        }
+
+        payload = {
+            "name": name,
+            "email": email,
+            "position": position,
+            "file_url": file_url,
+            "compressed_file_url": compressed_file_url,
+            "bulk_file_urls": json.dumps(bulk_file_urls),
+        }
+
+        insert_res = requests.post(insert_url, headers=insert_headers, json=payload, timeout=30)
+        debug["db_insert_status"] = insert_res.status_code
+
+        if insert_res.status_code in (200, 201):
+            return {"message": "Employee added successfully!", "debug": debug, "row": insert_res.json()}
+        else:
+            return {"error": "Database insert failed", "debug": debug, "db_text": insert_res.text}
+
+    except Exception as e:
+        return {"error": str(e)}
+        
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        SUPABASE_BUCKET = "employee-files"
+        upload_url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{file.filename}"
+
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Content-Type": file.content_type,
+        }
+
+        res = requests.post(upload_url, headers=headers, data=await file.read())
+
+        if res.status_code in [200, 201]:
+            file_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{file.filename}"
+            return {"file_url": file_url}
+        else:
+            return {"error": res.text}
+
+    except Exception as e:
+        return {"error": str(e)}
+ 
 # --------------------------------------------------------------------------
 # ✅ Bulk upload (REST API version)
 # --------------------------------------------------------------------------
@@ -85,19 +248,19 @@ async def login(request: Request):
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
     try:
-        # Validate file type
+        # ✅ Validate file type
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
 
-        # Read Excel
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
 
-        # Clean headers
+        # ✅ Normalize headers
         df.columns = [str(col).strip().replace(" ", "_").lower() for col in df.columns]
         logging.info(f"Excel columns detected: {df.columns.tolist()}")
 
-        # Map Excel headers to DB columns
+        # ✅ Required fields check
+        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
         column_mapping = {
             "first_name": "first_name",
             "last_name": "last_name",
@@ -105,33 +268,43 @@ async def bulk_upload(file: UploadFile = File(...)):
             "country": "country",
             "age": "age",
             "date": "date_of_event",
-            "date_of_event": "date_of_event",
             "id": "external_id",
-            "external_id": "external_id",
         }
-
-        # Rename Excel columns to match DB schema
         df.rename(columns=column_mapping, inplace=True)
-
-        # Check for required fields
-        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
         missing = [col for col in required if col not in df.columns]
         if missing:
             return JSONResponse(status_code=400, content={"error": f"Missing required columns: {', '.join(missing)}"})
 
-        # Convert date columns to string if needed
+        # ✅ Formula Injection Detection
+        def has_formula_injection(value):
+            if isinstance(value, str):
+                return re.match(r"^[=+\-@]", value.strip()) is not None
+            return False
+
+        suspicious_cells = []
+        for col in df.columns:
+            if df[col].apply(has_formula_injection).any():
+                suspicious_cells.append(col)
+
+        if suspicious_cells:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Formula injection detected in columns: {', '.join(suspicious_cells)}. Upload rejected."},
+            )
+
+        # ✅ Convert date columns safely
         if "date_of_event" in df.columns:
             df["date_of_event"] = pd.to_datetime(df["date_of_event"], errors="coerce").astype(str)
 
         records = df.to_dict(orient="records")
 
-        # ✅ Insert into Supabase via REST API
+        # ✅ Atomic Upload (all-or-nothing)
         url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}",
             "Content-Type": "application/json",
-            "Prefer": "return=representation",
+            "Prefer": "tx=commit",  # ⚡️ ensures atomic commit if supported
         }
 
         response = requests.post(url, headers=headers, json=records)
@@ -143,46 +316,6 @@ async def bulk_upload(file: UploadFile = File(...)):
         inserted_count = len(response.json())
         return JSONResponse(
             content={"message": f"✅ Successfully inserted {inserted_count} rows into employee_bulk_imports", "status": "success"}
-        )
-
-    except Exception as e:
-        logging.error(f"Bulk upload failed: {str(e)}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-    try:
-        if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-            return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
-
-        contents = await file.read()
-        df = pd.read_excel(BytesIO(contents))
-        df.columns = [str(col).strip().replace(" ", "_") for col in df.columns]
-
-        required_columns = ["First_Name", "Last_Name", "Gender", "Country", "Age", "Date", "Id"]
-        missing = [col for col in required_columns if col not in df.columns]
-        if missing:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Missing required columns: {', '.join(missing)}"},
-            )
-
-        if "Date" in df.columns:
-            df["Date"] = df["Date"].astype(str)
-
-        records = df.to_dict(orient="records")
-
-        # Insert records into Supabase via REST
-        url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
-        response = requests.post(url, headers=HEADERS, json=records)
-
-        if response.status_code not in (200, 201):
-            logging.error(f"Supabase insert failed: {response.text}")
-            return JSONResponse(status_code=response.status_code, content={"error": response.text})
-
-        return JSONResponse(
-            content={
-                "message": f"✅ Successfully inserted {len(records)} rows into employee_bulk_imports",
-                "status": "success",
-            }
         )
 
     except Exception as e:
