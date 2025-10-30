@@ -248,20 +248,21 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.post("/bulk_upload")
 async def bulk_upload(file: UploadFile = File(...)):
+    
     try:
-        # ✅ Validate file type
+        # Validate file type
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
 
+        # Read Excel
         contents = await file.read()
         df = pd.read_excel(BytesIO(contents))
 
-        # ✅ Normalize headers
+        # Clean headers
         df.columns = [str(col).strip().replace(" ", "_").lower() for col in df.columns]
         logging.info(f"Excel columns detected: {df.columns.tolist()}")
 
-        # ✅ Required fields check
-        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
+        # Map Excel headers to DB columns
         column_mapping = {
             "first_name": "first_name",
             "last_name": "last_name",
@@ -269,43 +270,33 @@ async def bulk_upload(file: UploadFile = File(...)):
             "country": "country",
             "age": "age",
             "date": "date_of_event",
+            "date_of_event": "date_of_event",
             "id": "external_id",
+            "external_id": "external_id",
         }
+
+        # Rename Excel columns to match DB schema
         df.rename(columns=column_mapping, inplace=True)
+
+        # Check for required fields
+        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
         missing = [col for col in required if col not in df.columns]
         if missing:
             return JSONResponse(status_code=400, content={"error": f"Missing required columns: {', '.join(missing)}"})
 
-        # ✅ Formula Injection Detection
-        def has_formula_injection(value):
-            if isinstance(value, str):
-                return re.match(r"^[=+\-@]", value.strip()) is not None
-            return False
-
-        suspicious_cells = []
-        for col in df.columns:
-            if df[col].apply(has_formula_injection).any():
-                suspicious_cells.append(col)
-
-        if suspicious_cells:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Formula injection detected in columns: {', '.join(suspicious_cells)}. Upload rejected."},
-            )
-
-        # ✅ Convert date columns safely
+        # Convert date columns to string if needed
         if "date_of_event" in df.columns:
             df["date_of_event"] = pd.to_datetime(df["date_of_event"], errors="coerce").astype(str)
 
         records = df.to_dict(orient="records")
 
-        # ✅ Atomic Upload (all-or-nothing)
+        # ✅ Insert into Supabase via REST API
         url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}",
             "Content-Type": "application/json",
-            "Prefer": "tx=commit",  # ⚡️ ensures atomic commit if supported
+            "Prefer": "return=representation",
         }
 
         response = requests.post(url, headers=headers, json=records)
@@ -323,3 +314,42 @@ async def bulk_upload(file: UploadFile = File(...)):
         logging.error(f"Bulk upload failed: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
+    try:
+        if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
+
+        contents = await file.read()
+        df = pd.read_excel(BytesIO(contents))
+        df.columns = [str(col).strip().replace(" ", "_") for col in df.columns]
+
+        required_columns = ["First_Name", "Last_Name", "Gender", "Country", "Age", "Date", "Id"]
+        missing = [col for col in required_columns if col not in df.columns]
+        if missing:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Missing required columns: {', '.join(missing)}"},
+            )
+
+        if "Date" in df.columns:
+            df["Date"] = df["Date"].astype(str)
+
+        records = df.to_dict(orient="records")
+
+        # Insert records into Supabase via REST
+        url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
+        response = requests.post(url, headers=HEADERS, json=records)
+
+        if response.status_code not in (200, 201):
+            logging.error(f"Supabase insert failed: {response.text}")
+            return JSONResponse(status_code=response.status_code, content={"error": response.text})
+
+        return JSONResponse(
+            content={
+                "message": f"✅ Successfully inserted {len(records)} rows into employee_bulk_imports",
+                "status": "success",
+            }
+        )
+
+    except Exception as e:
+        logging.error(f"Bulk upload failed: {str(e)}")
+      
