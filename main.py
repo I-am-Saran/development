@@ -6,6 +6,7 @@ from io import BytesIO
 import logging, re
 import requests
 
+
 # Initialize FastAPI
 app = FastAPI()
 logging.basicConfig(level=logging.INFO)
@@ -253,29 +254,14 @@ async def bulk_upload(file: UploadFile = File(...)):
             return JSONResponse(status_code=422, content={"error": "Invalid file type. Please upload .xlsx only."})
 
         contents = await file.read()
-
-        # ✅ Load workbook in formula mode
-        wb = openpyxl.load_workbook(BytesIO(contents), data_only=False)  # data_only=False → keeps formulas
-        ws = wb.active
-
-        # ✅ Formula Injection Check (before anything else)
-        formula_cells = []
-        for row in ws.iter_rows(values_only=False):
-            for cell in row:
-                if isinstance(cell.value, str) and cell.value.strip().startswith(("=", "+", "-", "@")):
-                    formula_cells.append(f"{cell.coordinate}: {cell.value}")
-
-        if formula_cells:
-            return JSONResponse(
-                status_code=400,
-                content={"error": f"Formula injection detected in cells: {', '.join(formula_cells[:10])} (showing first 10). Upload rejected."},
-            )
-
-        # ✅ Safe to load with pandas now
         df = pd.read_excel(BytesIO(contents))
 
-        # Clean & rename headers
+        # ✅ Normalize headers
         df.columns = [str(col).strip().replace(" ", "_").lower() for col in df.columns]
+        logging.info(f"Excel columns detected: {df.columns.tolist()}")
+
+        # ✅ Required fields check
+        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
         column_mapping = {
             "first_name": "first_name",
             "last_name": "last_name",
@@ -286,36 +272,54 @@ async def bulk_upload(file: UploadFile = File(...)):
             "id": "external_id",
         }
         df.rename(columns=column_mapping, inplace=True)
-
-        # Required check
-        required = ["first_name", "last_name", "gender", "country", "age", "date_of_event", "external_id"]
         missing = [col for col in required if col not in df.columns]
         if missing:
             return JSONResponse(status_code=400, content={"error": f"Missing required columns: {', '.join(missing)}"})
 
-        # Convert date safely
+        # ✅ Formula Injection Detection
+        def has_formula_injection(value):
+            if isinstance(value, str):
+                return re.match(r"^[=+\-@]", value.strip()) is not None
+            return False
+
+        suspicious_cells = []
+        for col in df.columns:
+            if df[col].apply(has_formula_injection).any():
+                suspicious_cells.append(col)
+
+        if suspicious_cells:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"Formula injection detected in columns: {', '.join(suspicious_cells)}. Upload rejected."},
+            )
+
+        # ✅ Convert date columns safely
         if "date_of_event" in df.columns:
             df["date_of_event"] = pd.to_datetime(df["date_of_event"], errors="coerce").astype(str)
 
         records = df.to_dict(orient="records")
 
-        # ✅ Atomic Upload (if supported)
+        # ✅ Atomic Upload (all-or-nothing)
         url = f"{SUPABASE_URL}/rest/v1/employee_bulk_imports"
         headers = {
             "apikey": SUPABASE_KEY,
             "Authorization": f"Bearer {SUPABASE_KEY}",
             "Content-Type": "application/json",
-            "Prefer": "tx=commit",
+            "Prefer": "tx=commit",  # ⚡️ ensures atomic commit if supported
         }
 
         response = requests.post(url, headers=headers, json=records)
+
         if response.status_code not in (200, 201):
             logging.error(f"Supabase insert failed: {response.text}")
             return JSONResponse(status_code=response.status_code, content={"error": response.text})
 
         inserted_count = len(response.json())
-        return JSONResponse(content={"message": f"✅ Inserted {inserted_count} rows successfully", "status": "success"})
+        return JSONResponse(
+            content={"message": f"✅ Successfully inserted {inserted_count} rows into employee_bulk_imports", "status": "success"}
+        )
 
     except Exception as e:
         logging.error(f"Bulk upload failed: {str(e)}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
