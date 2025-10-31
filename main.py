@@ -5,6 +5,8 @@ import pandas as pd
 from io import BytesIO
 import logging, re
 import requests, urllib.parse
+import time
+import json
 
 
 # Initialize FastAPI
