@@ -72,7 +72,11 @@ async def login(request: Request):
         response = requests.post(url, headers=HEADERS, json=payload)
 
         if response.status_code != 200:
-            return JSONResponse(status_code=response.status_code, content={"error": "Invalid credentials"})
+            print("SUPABASE LOGIN FAILED:", response.text)  # 👈 add this
+            return JSONResponse(
+                status_code=response.status_code,
+                content={"error": response.text}
+            )
 
         return JSONResponse(content=response.json())
     except Exception as e:
