@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { PDFDocument } from "pdf-lib";
-
+import { useNavigate } from "react-router-dom";
 
 export default function AddEmployee() {
   const [name, setName] = useState("");
@@ -10,24 +10,27 @@ export default function AddEmployee() {
   const [compressedFile, setCompressedFile] = useState(null);
   const [message, setMessage] = useState("");
   const [employees, setEmployees] = useState([]);
+  const [bulkFiles, setBulkFiles] = useState([]);
   const fileInputRef = useRef();
   const compressedInputRef = useRef();
+  const bulkInputRef = useRef();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchEmployees();
   }, []);
 
   const fetchEmployees = async () => {
-    try {
-      const res = await fetch("https://development-p6rb.onrender.com/employees");
-      const data = await res.json();
-      if (data.employees) setEmployees(data.employees);
-    } catch (err) {
-      console.error("Failed to fetch employees:", err);
-    }
-  };
+  try {
+    const res = await fetch("https://development-p6rb.onrender.com/employees");
+    const data = await res.json();
+    setEmployees(data); // API returns an array directly
+  } catch (err) {
+    console.error("Failed to fetch employees:", err);
+  }
+};
 
-  // Compress PDF file
+
   const handleCompressedUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -53,351 +56,310 @@ export default function AddEmployee() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  const formData = new FormData();
-  formData.append("name", name);
-  formData.append("email", email);
-  formData.append("position", position);
-  if (file) formData.append("file", file);
-  if (compressedFile) formData.append("compressed_file", compressedFile);
-  if (bulkFiles.length > 0) {
-  bulkFiles.forEach((f) => {
-    formData.append("bulk_files", f);
-  });
-}
-
-  try {
-    console.log("Bulk files added:", bulkFiles.map(f => f.name));
-    for (let pair of formData.entries()) {
-      console.log(pair[0], pair[1]);
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("email", email);
+    formData.append("position", position);
+    if (file) formData.append("file", file);
+    if (compressedFile) formData.append("compressed_file", compressedFile);
+    if (bulkFiles.length > 0) {
+      bulkFiles.forEach((f) => formData.append("bulk_files", f));
     }
-    
-    const res = await fetch("https://development-p6rb.onrender.com/add-employee", {
-      method: "POST",
-      body: formData,
-    });
 
-    const data = await res.json();
-    setMessage(data.message || data.error || "Uploaded successfully!");
+    try {
+      const res = await fetch("https://development-p6rb.onrender.com/add-employee", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      setMessage(data.message || data.error || "Uploaded successfully!");
 
-    // reset
-    setName("");
-    setEmail("");
-    setPosition("");
-    setFile(null);
-    setCompressedFile(null);
-    setBulkFiles([]);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    if (compressedInputRef.current) compressedInputRef.current.value = "";
-    if (bulkInputRef.current) bulkInputRef.current.value = "";
+      setName("");
+      setEmail("");
+      setPosition("");
+      setFile(null);
+      setCompressedFile(null);
+      setBulkFiles([]);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (compressedInputRef.current) compressedInputRef.current.value = "";
+      if (bulkInputRef.current) bulkInputRef.current.value = "";
 
-    fetchEmployees();
-  } catch (err) {
-    console.error(err);
-    setMessage("Something went wrong!");
-  }
-};
-
-  const [bulkFiles, setBulkFiles] = useState([]);
-  const bulkInputRef = useRef();
+      fetchEmployees();
+    } catch (err) {
+      console.error(err);
+      setMessage("Something went wrong!");
+    }
+  };
 
   return (
-    <div style={styles.container}>
-      {/* Header with Logout button */}
-    <div style={styles.header}>
-      <h2 style={styles.heading}>Add Employee Form</h2>
-      <button
-        onClick={() => {
-          // Clear local storage or tokens (optional)
-          localStorage.clear();
-          // Redirect to login page
-          window.location.href = "/";
-        }}
-        style={styles.logoutButton}
-      >
-        Logout
-      </button>
-        </div>
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <input
-          type="text"
-          placeholder="Name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-          style={styles.input}
-        />
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={styles.input}
-        />
-        <input
-          type="text"
-          placeholder="Position"
-          value={position}
-          onChange={(e) => setPosition(e.target.value)}
-          required
-          style={styles.input}
-        />
-
-        {/* Normal Upload */}
-        <div
-          style={{
-            background: "#f9fafb",
-            padding: "16px",
-            borderRadius: "12px",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-            marginBottom: "16px",
-            transition: "all 0.3s ease",
-            width: "300px",
+    <div style={styles.layout}>
+      {/* Sidebar */}
+      <div style={styles.sidebar}>
+        <h2 style={styles.logo}>⚙️ Admin Panel</h2>
+        <ul style={styles.menu}>
+          <li
+            style={styles.activeMenuItem}
+            onClick={() => navigate("/add-employee")}
+          >
+            ➕ Add Employee
+          </li>
+          <li
+            style={styles.menuItem}
+            onClick={() => navigate("/bulk-upload")}
+          >
+            📂 Bulk Upload
+          </li>
+        </ul>
+        <button
+          style={styles.logoutButton}
+          onClick={() => {
+            localStorage.clear();
+            navigate("/");
           }}
         >
-          <label
-            style={{
-              display: "block",
-              fontWeight: "600",
-              fontSize: "14px",
-              color: "#1f2937",
-              marginBottom: "8px",
-            }}
-          >
-            Upload Normal PDF:
-          </label>
-          <input
-            type="file"
-            accept="application/pdf"
-            onChange={(e) => setFile(e.target.files[0])}
-            ref={fileInputRef}
-            style={{
-              width: "60%",
-              padding: "10px",
-              border: "2px dashed #9ca3af",
-              borderRadius: "10px",
-              background: "#fff",
-              cursor: "pointer",
-              transition: "border-color 0.3s ease, background 0.3s ease",
-            }}
-            onMouseOver={(e) => {
-              e.target.style.borderColor = "#2563eb";
-              e.target.style.background = "#f0f9ff";
-            }}
-            onMouseOut={(e) => {
-              e.target.style.borderColor = "#9ca3af";
-              e.target.style.background = "#fff";
-            }}
-          />
-        </div>
-
-        {/* Compressed Upload */}
-        <div
-  style={{
-    background: "#f9fafb",
-    padding: "16px",
-    borderRadius: "12px",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-    transition: "all 0.3s ease",
-    width: "300px",
-  }}
->
-  <label
-    style={{
-      display: "block",
-      fontWeight: "600",
-      fontSize: "14px",
-      color: "#1f2937",
-      marginBottom: "8px",
-    }}
-  >
-    Upload & Compress PDF:
-  </label>
-  <input
-    type="file"
-    accept="application/pdf"
-    onChange={handleCompressedUpload}
-    ref={compressedInputRef}
-    style={{
-      width: "60%",
-      padding: "10px",
-      border: "2px dashed #9ca3af",
-      borderRadius: "10px",
-      background: "#fff",
-      cursor: "pointer",
-      transition: "border-color 0.3s ease, background 0.3s ease",
-    }}
-    onMouseOver={(e) => {
-      e.target.style.borderColor = "#2563eb";
-      e.target.style.background = "#f0f9ff";
-    }}
-    onMouseOut={(e) => {
-      e.target.style.borderColor = "#9ca3af";
-      e.target.style.background = "#fff";
-    }}
-  />
-</div>
-
-{/* Bulk Upload Section */}
-<div
-  style={{
-    background: "#f9fafb",
-    padding: "16px",
-    borderRadius: "12px",
-    boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-    transition: "all 0.3s ease",
-    width: "300px",
-  }}
->
-  <label
-    style={{
-      display: "block",
-      fontWeight: "600",
-      fontSize: "14px",
-      color: "#1f2937",
-      marginBottom: "8px",
-    }}
-  >
-    Upload Multiple Files (Bulk Upload):
-  </label>
-  <input
-    type="file"
-    multiple
-    accept="application/pdf"
-    name="bulk_files"
-    onChange={(e) => setBulkFiles(Array.from(e.target.files))}
-    ref={bulkInputRef}
-    style={{
-      width: "60%",
-      padding: "10px",
-      border: "2px dashed #9ca3af",
-      borderRadius: "10px",
-      background: "#fff",
-      cursor: "pointer",
-      transition: "border-color 0.3s ease, background 0.3s ease",
-    }}
-    onMouseOver={(e) => {
-      e.target.style.borderColor = "#2563eb";
-      e.target.style.background = "#f0f9ff";
-    }}
-    onMouseOut={(e) => {
-      e.target.style.borderColor = "#9ca3af";
-      e.target.style.background = "#fff";
-    }}
-  />
-</div>
-
-
-
-
-        <button type="submit" style={styles.button}>
-          <b>Add Employee</b>
+          🚪 Logout
         </button>
-      </form>
+      </div>
 
-      {message && <p style={styles.message}>{message}</p>}
+      {/* Main Content */}
+      <div style={styles.mainContent}>
+        <h2 style={styles.heading}>Add Employee Form</h2>
+        <form onSubmit={handleSubmit} style={styles.form}>
+          <input
+            type="text"
+            placeholder="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            style={styles.input}
+          />
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            style={styles.input}
+          />
+          <input
+            type="text"
+            placeholder="Position"
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+            required
+            style={styles.input}
+          />
 
-      <h3 style={styles.tableHeading}>Employee List</h3>
-      <div style={styles.tableContainer}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              <th style={styles.th}>Name</th>
-              <th style={styles.th}>Email</th>
-              <th style={styles.th}>Position</th>
-              <th style={styles.th}>File</th>
-              <th style={styles.th}>Compressed File</th>
-            </tr>
-          </thead>
-          <tbody>
-            {employees.map((emp) => (
-              <tr key={emp.id} style={styles.tr}>
-                <td style={styles.td}>{emp.name}</td>
-                <td style={styles.td}>{emp.email}</td>
-                <td style={styles.td}>{emp.position}</td>
-                <td style={styles.td}>
-                  {emp.file_url ? (
-                    <a href={emp.file_url} target="_blank" rel="noopener noreferrer" style={styles.link}>
-                      View File
-                    </a>
-                  ) : (
-                    "No File"
-                  )}
-                </td>
-                <td style={styles.td}>
-                  {emp.compressed_file_url ? (
-                    <a href={emp.compressed_file_url} target="_blank" rel="noopener noreferrer" style={styles.link}>
-                      View File
-                    </a>
-                  ) : (
-                    "No File"
-                  )}
-                </td>
+          {/* Normal Upload */}
+          <div style={styles.uploadBox}>
+            <label style={styles.label}>Upload Normal PDF:</label>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={(e) => setFile(e.target.files[0])}
+              ref={fileInputRef}
+              style={styles.fileInput}
+            />
+          </div>
+
+          {/* Compressed Upload */}
+          <div style={styles.uploadBox}>
+            <label style={styles.label}>Upload & Compress PDF:</label>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={handleCompressedUpload}
+              ref={compressedInputRef}
+              style={styles.fileInput}
+            />
+          </div>
+
+          {/* Bulk Upload */}
+          <div style={styles.uploadBox}>
+            <label style={styles.label}>Upload Multiple Files (Bulk Upload):</label>
+            <input
+              type="file"
+              multiple
+              accept="application/pdf"
+              onChange={(e) => setBulkFiles(Array.from(e.target.files))}
+              ref={bulkInputRef}
+              style={styles.fileInput}
+            />
+          </div>
+
+          <button type="submit" style={styles.submitButton}>
+            Add Employee
+          </button>
+        </form>
+
+        {message && <p style={styles.message}>{message}</p>}
+
+        <h3 style={styles.subHeading}>Employee List</h3>
+        <div style={styles.tableContainer}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>Name</th>
+                <th style={styles.th}>Email</th>
+                <th style={styles.th}>Position</th>
+                <th style={styles.th}>File</th>
+                <th style={styles.th}>Compressed File</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {employees.map((emp) => (
+                <tr key={emp.id}>
+                  <td style={styles.td}>{emp.name}</td>
+                  <td style={styles.td}>{emp.email}</td>
+                  <td style={styles.td}>{emp.position}</td>
+                  <td style={styles.td}>
+                    {emp.file_url ? (
+                      <a href={emp.file_url} target="_blank" rel="noreferrer" style={styles.link}>
+                        View File
+                      </a>
+                    ) : (
+                      "No File"
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    {emp.compressed_file_url ? (
+                      <a href={emp.compressed_file_url} target="_blank" rel="noreferrer" style={styles.link}>
+                        View File
+                      </a>
+                    ) : (
+                      "No File"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
 }
+
 // Styles
 const styles = {
-  container: {
-    maxWidth: "900px",
-    margin: "50px auto",
+  layout: {
+    display: "flex",
+    height: "100vh",
+    background: "radial-gradient(circle at 10% 20%, #2b2d77, #15172b 70%)",
+    color: "#fff",
+    fontFamily: "'Poppins', sans-serif",
+  },
+  sidebar: {
+    width: "220px",
+    background: "rgba(255,255,255,0.1)",
+    backdropFilter: "blur(12px)",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
     padding: "20px",
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    backgroundColor: "#f9f9f9",
-    borderRadius: "10px",
-    boxShadow: "0px 0px 15px rgba(0,0,0,0.1)",
+    boxShadow: "4px 0 20px rgba(0,0,0,0.2)",
+  },
+  logo: {
+    fontSize: "18px",
+    fontWeight: "600",
+    marginBottom: "20px",
+  },
+  menu: {
+    listStyle: "none",
+    padding: 0,
+  },
+  menuItem: {
+    padding: "10px 0",
+    cursor: "pointer",
+    color: "rgba(255,255,255,0.8)",
+    transition: "0.3s",
+  },
+  activeMenuItem: {
+    padding: "10px 0",
+    fontWeight: "600",
+    color: "#fff",
+    borderLeft: "4px solid #a855f7",
+    paddingLeft: "10px",
+  },
+  logoutButton: {
+    background: "linear-gradient(90deg,#ef4444,#b91c1c)",
+    border: "none",
+    color: "#fff",
+    padding: "10px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: "600",
+  },
+  mainContent: {
+    flex: 1,
+    padding: "40px",
+    overflowY: "auto",
   },
   heading: {
-    textAlign: "center",
-    marginBottom: "20px",
-    color: "#333",
+    fontSize: "24px",
+    marginBottom: "30px",
+    fontWeight: "500",
   },
   form: {
     display: "flex",
     flexDirection: "column",
     gap: "15px",
-    marginBottom: "30px",
+    width: "350px",
+    background: "rgba(255,255,255,0.1)",
+    padding: "30px",
+    borderRadius: "16px",
+    backdropFilter: "blur(12px)",
   },
   input: {
-    padding: "10px",
-    borderRadius: "5px",
-    border: "1px solid #ccc",
-    fontSize: "16px",
-    width: "300px",
+    width: "100%",
+    padding: "12px",
+    borderRadius: "8px",
+    border: "none",
+    outline: "none",
+    background: "rgba(255,255,255,0.15)",
+    color: "#fff",
+  },
+  uploadBox: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  label: {
+    fontSize: "14px",
+    color: "#fff",
   },
   fileInput: {
-    fontSize: "16px",
+    padding: "10px",
+    borderRadius: "8px",
+    background: "rgba(255,255,255,0.15)",
+    border: "none",
+    color: "#fff",
   },
-  button: {
+  submitButton: {
+    background:
+      "linear-gradient(90deg, rgba(99,102,241,1) 0%, rgba(168,85,247,1) 100%)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "8px",
     padding: "12px",
-  width: "200px",
-  backgroundColor: "#1d5c39ff",
-  color: "#fff",
-  border: "none",
-  borderRadius: "5px",
-  fontSize: "16px",
-  cursor: "pointer",
-  transition: "all 0.3s ease",
-  boxShadow: "0 5px 0 #144c2f"
+    cursor: "pointer",
+    fontWeight: "600",
   },
   message: {
-    color: "green",
-    fontWeight: "bold",
-    marginTop: "10px",
-    textAlign: "center",
+    marginTop: "15px",
+    color: "#ffbdbd",
   },
-  tableHeading: {
-    marginBottom: "10px",
-    color: "#333",
+  subHeading: {
+    marginTop: "40px",
+    fontSize: "18px",
+    fontWeight: "500",
   },
   tableContainer: {
+    marginTop: "10px",
+    background: "rgba(255,255,255,0.05)",
+    borderRadius: "10px",
     overflowX: "auto",
   },
   table: {
@@ -405,38 +367,16 @@ const styles = {
     borderCollapse: "collapse",
   },
   th: {
-    textAlign: "left",
     padding: "10px",
-    backgroundColor: "#676868ff",
-    color: "#fff",
+    textAlign: "left",
+    borderBottom: "1px solid rgba(255,255,255,0.2)",
   },
   td: {
     padding: "10px",
-    borderBottom: "1px solid #ccc",
-  },
-  tr: {
-    transition: "background-color 0.2s",
+    borderBottom: "1px solid rgba(255,255,255,0.1)",
   },
   link: {
-    color: "#0070f3",
-    textDecoration: "none",
-    fontWeight: "bold",
+    color: "#a78bfa",
+    textDecoration: "underline",
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
-  },
-  logoutButton: {
-    padding: "8px 16px",
-    backgroundColor: "#ff4d4d",
-    color: "#fff",
-    border: "none",
-    borderRadius: "5px",
-    fontSize: "14px",
-    cursor: "pointer",
-    transition: "background-color 0.3s",
-  },
-  
 };
