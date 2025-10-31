@@ -7,7 +7,8 @@ import logging, re
 import requests, urllib.parse
 import time
 import json
-
+from urllib.parse import quote
+SUPABASE_BUCKET = "employee-files"
 
 # Initialize FastAPI
 app = FastAPI()
