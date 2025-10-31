@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 import pandas as pd
 from io import BytesIO
 import logging, re
-import requests
+import requests, urllib.parse
 
 
 # Initialize FastAPI
@@ -56,7 +56,6 @@ async def get_employees():
 # --------------------------------------------------------------------------
 # ✅ Login route
 # --------------------------------------------------------------------------
-
 @app.post("/login")
 async def login(request: Request):
     try:
@@ -67,18 +66,24 @@ async def login(request: Request):
         if not email or not password:
             return JSONResponse(status_code=400, content={"error": "Email and password required"})
 
-        url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
-        payload = {"email": email, "password": password}
-        response = requests.post(url, headers=HEADERS, json=payload)
+        # ✅ Query Supabase 'users' table instead of 'employees'
+        url = f"{SUPABASE_URL}/rest/v1/users?email=eq.{email}&select=password"
+        headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}"
+        }
 
-        if response.status_code != 200:
-            print("SUPABASE LOGIN FAILED:", response.text)  # 👈 add this
-            return JSONResponse(
-                status_code=response.status_code,
-                content={"error": response.text}
-            )
+        response = requests.get(url, headers=headers)
 
-        return JSONResponse(content=response.json())
+        if response.status_code != 200 or not response.json():
+            return JSONResponse(status_code=401, content={"error": "Invalid credentials"})
+
+        user = response.json()[0]
+        if user["password"] != password:
+            return JSONResponse(status_code=401, content={"error": "Invalid credentials"})
+
+        return JSONResponse(content={"message": "Login successful!"})
+
     except Exception as e:
         logging.error(f"Login error: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
